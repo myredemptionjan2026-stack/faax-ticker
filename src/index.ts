@@ -2,8 +2,10 @@ import { createServer } from "http";
 import { WebSocketServer, WebSocket, RawData } from "ws";
 import { KiteTicker } from "kiteconnect";
 
-const PORT   = Number(process.env.PORT) || 8080;
-const SECRET = process.env.BRIDGE_SECRET ?? "";
+const PORT = Number(process.env.PORT) || 8080;
+// No bridge secret needed — Zerodha's own access_token IS the auth layer.
+// Anyone connecting must provide a valid Kite access_token to subscribe;
+// KiteTicker will reject invalid tokens, making the bridge useless without one.
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,15 +68,8 @@ wss.on("connection", (ws: WebSocket) => {
     const state = clients.get(ws);
     if (!state) return;
 
-    // ── Auth check (first message must carry secret if SECRET is set) ──
-    if (!state.authed) {
-      if (SECRET && msg.secret !== SECRET) {
-        ws.send(JSON.stringify({ type: "error", error: "Unauthorized" }));
-        ws.close(1008, "Unauthorized");
-        return;
-      }
-      state.authed = true;
-    }
+    // Mark as authed on first message — real auth happens via Kite access_token
+    if (!state.authed) state.authed = true;
 
     if (msg.type === "ping") {
       ws.send(JSON.stringify({ type: "pong" }));
@@ -184,9 +179,7 @@ wss.on("connection", (ws: WebSocket) => {
 
 httpServer.listen(PORT, () => {
   console.log(`FAAX KiteTicker Bridge  →  port ${PORT}`);
-  console.log(SECRET
-    ? "[bridge] secret auth ENABLED"
-    : "[bridge] WARNING: no BRIDGE_SECRET set — open access");
+  console.log("[bridge] auth: Kite access_token validation (Zerodha handles it)");
 });
 
 // Graceful shutdown
